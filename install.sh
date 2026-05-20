@@ -121,10 +121,12 @@ build_app_icon
 printf "%s\n" "$ROOT_DIR" > "$RESOURCES_DIR/SourceRoot.path"
 printf "%s\n" "$DEST_DIR" > "$RESOURCES_DIR/InstallDirectory.path"
 chmod +x "$MACOS_DIR/$EXECUTABLE_NAME"
-codesign --force --deep --sign - "$APP_DIR" >/dev/null
+codesign --force --deep --sign "$SIGN_IDENTITY" "$APP_DIR" >/dev/null
 
 mkdir -p "$DEST_DIR"
+quit_running_app
 rm -rf "$APP_DEST"
+rm -rf "$OLD_APP_DEST"
 cp -R "$APP_DIR" "$APP_DEST"
 
 if [[ "${SMOOTH_SCROLL_SKIP_OPEN:-0}" != "1" ]]; then
