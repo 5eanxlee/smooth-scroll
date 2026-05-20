@@ -101,6 +101,7 @@ build_app_icon() {
 }
 
 cd "$ROOT_DIR"
+notify_from_app "Updating Mouse++..."
 mkdir -p "$ROOT_DIR/.build/module-cache"
 export CLANG_MODULE_CACHE_PATH="$ROOT_DIR/.build/module-cache"
 
@@ -113,9 +114,12 @@ swift build \
   --disable-dependency-cache
 
 rm -rf "$APP_DIR"
-mkdir -p "$MACOS_DIR"
+mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 cp ".build/$CONFIGURATION/$EXECUTABLE_NAME" "$MACOS_DIR/$EXECUTABLE_NAME"
 cp "Resources/Info.plist" "$CONTENTS_DIR/Info.plist"
+build_app_icon
+printf "%s\n" "$ROOT_DIR" > "$RESOURCES_DIR/SourceRoot.path"
+printf "%s\n" "$DEST_DIR" > "$RESOURCES_DIR/InstallDirectory.path"
 chmod +x "$MACOS_DIR/$EXECUTABLE_NAME"
 codesign --force --deep --sign - "$APP_DIR" >/dev/null
 
