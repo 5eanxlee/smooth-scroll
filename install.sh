@@ -35,6 +35,8 @@ mkdir -p "$DEST_DIR"
 rm -rf "$APP_DEST"
 cp -R "$APP_DIR" "$APP_DEST"
 
-open "$APP_DEST"
+if [[ "${SMOOTH_SCROLL_SKIP_OPEN:-0}" != "1" ]]; then
+  open "$APP_DEST"
+fi
 
 echo "Installed: $APP_DEST"
