@@ -133,4 +133,6 @@ if [[ "${SMOOTH_SCROLL_SKIP_OPEN:-0}" != "1" ]]; then
   open "$APP_DEST"
 fi
 
-echo "Installed: $APP_DEST"
+echo "Updated: $APP_DEST"
+echo "Signed with: $SIGN_IDENTITY"
+notify_from_app "Updated and reopened."
