@@ -2,10 +2,12 @@
 dist/
 .install-test/
 .repo/
+smooth-scroll/
+smooth-scroll-git/
 .swiftpm/
 .home/
-Tests/
 scripts/
 DerivedData/
 *.xcuserdata/
 .DS_Store
+Tests/
