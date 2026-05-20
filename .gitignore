@@ -1,5 +1,7 @@
 .build/
 dist/
+.install-test/
+.repo/
 .swiftpm/
 .home/
 Tests/
