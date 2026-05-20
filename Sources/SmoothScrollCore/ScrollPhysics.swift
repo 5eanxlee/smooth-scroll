@@ -3,17 +3,26 @@ import Foundation
 public struct ScrollPhysicsConfiguration: Equatable, Sendable {
     public var pixelsPerWheelStep: Double
     public var timeConstant: Double
+    public var verticalMultiplier: Double
+    public var horizontalMultiplier: Double
+    public var acceleration: Double
     public var minimumVelocity: Double
     public var maximumVelocity: Double
 
     public init(
         pixelsPerWheelStep: Double = 72.0,
         timeConstant: Double = 0.18,
+        verticalMultiplier: Double = 1.0,
+        horizontalMultiplier: Double = 1.0,
+        acceleration: Double = 0.0,
         minimumVelocity: Double = 4.0,
         maximumVelocity: Double = 12_000.0
     ) {
         self.pixelsPerWheelStep = pixelsPerWheelStep
         self.timeConstant = timeConstant
+        self.verticalMultiplier = verticalMultiplier
+        self.horizontalMultiplier = horizontalMultiplier
+        self.acceleration = acceleration
         self.minimumVelocity = minimumVelocity
         self.maximumVelocity = maximumVelocity
     }
@@ -63,8 +72,17 @@ public struct ScrollPhysicsEngine: Sendable {
 
     public mutating func addWheelDelta(horizontalLines: Double, verticalLines: Double) {
         let timeConstant = max(configuration.timeConstant, 0.001)
-        velocityX += (horizontalLines * configuration.pixelsPerWheelStep) / timeConstant
-        velocityY += (verticalLines * configuration.pixelsPerWheelStep) / timeConstant
+        let acceleration = configuration.acceleration.clamped(to: 0.0 ... 2.0)
+        let currentSpeed = max(abs(velocityX), abs(velocityY))
+        let speedRatio = (currentSpeed / 2_500.0).clamped(to: 0.0 ... 1.0)
+        let accelerationFactor = 1.0 + (acceleration * speedRatio)
+        let horizontalPixels = horizontalLines * configuration.pixelsPerWheelStep *
+            configuration.horizontalMultiplier * accelerationFactor
+        let verticalPixels = verticalLines * configuration.pixelsPerWheelStep *
+            configuration.verticalMultiplier * accelerationFactor
+
+        velocityX += horizontalPixels / timeConstant
+        velocityY += verticalPixels / timeConstant
         velocityX = velocityX.clamped(to: -configuration.maximumVelocity ... configuration.maximumVelocity)
         velocityY = velocityY.clamped(to: -configuration.maximumVelocity ... configuration.maximumVelocity)
     }
