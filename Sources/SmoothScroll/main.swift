@@ -1380,13 +1380,18 @@ final class SettingsViewController: NSViewController {
     init(
         settings: SettingsStore,
         scrollController: ScrollController,
-        launchAgentManager: LaunchAgentManager
+        launchAgentManager: LaunchAgentManager,
+        applicationMonitor: ApplicationMonitor
     ) {
         self.settings = settings
         self.scrollController = scrollController
         self.launchAgentManager = launchAgentManager
+        self.applicationMonitor = applicationMonitor
         super.init(nibName: nil, bundle: nil)
         self.scrollController.addStatusObserver { [weak self] _ in
+            self?.refresh()
+        }
+        self.applicationMonitor.onChange = { [weak self] in
             self?.refresh()
         }
     }
@@ -1396,8 +1401,119 @@ final class SettingsViewController: NSViewController {
     }
 
     override func loadView() {
-        view = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 250))
+        view = NSView(frame: NSRect(origin: .zero, size: SettingsTab.scrolling.contentSize))
 
+        let root = NSStackView()
+        root.orientation = .vertical
+        root.alignment = .centerX
+        root.spacing = 0
+        root.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(root)
+
+        let tabBar = NSStackView()
+        tabBar.orientation = .horizontal
+        tabBar.alignment = .centerY
+        tabBar.spacing = 2
+        tabBar.edgeInsets = NSEdgeInsets(top: 8, left: 0, bottom: 8, right: 0)
+        for tab in SettingsTab.allCases {
+            let item = TabBarItem(title: tab.title, symbolName: tab.symbolName)
+            item.onClick = { [weak self] in self?.selectTab(tab) }
+            tabButtons[tab] = item
+            tabBar.addArrangedSubview(item)
+        }
+        root.addArrangedSubview(tabBar)
+
+        let separator = NSBox()
+        separator.boxType = .separator
+        separator.translatesAutoresizingMaskIntoConstraints = false
+        root.addArrangedSubview(separator)
+
+        contentContainer.wantsLayer = true
+        contentContainer.layer?.masksToBounds = true
+        contentContainer.translatesAutoresizingMaskIntoConstraints = false
+        root.addArrangedSubview(contentContainer)
+
+        NSLayoutConstraint.activate([
+            root.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            root.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            root.topAnchor.constraint(equalTo: view.topAnchor),
+            root.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            separator.widthAnchor.constraint(equalTo: root.widthAnchor),
+            contentContainer.widthAnchor.constraint(equalTo: root.widthAnchor)
+        ])
+
+        selectTab(.scrolling)
+        refresh()
+    }
+
+    override func viewWillAppear() {
+        super.viewWillAppear()
+        refresh()
+    }
+
+    private func selectTab(_ tab: SettingsTab) {
+        guard selectedTab != tab || contentContainer.subviews.isEmpty else {
+            return
+        }
+        let isInitial = contentContainer.subviews.isEmpty
+        selectedTab = tab
+        for (candidate, item) in tabButtons {
+            item.setSelected(candidate == tab)
+        }
+
+        installContent(for: tab)
+        resizeWindow(to: tab.contentSize, animated: !isInitial && view.window != nil)
+    }
+
+    private func installContent(for tab: SettingsTab) {
+        accessibilityRows.removeAll()
+        contentContainer.subviews.forEach { $0.removeFromSuperview() }
+        let content: NSView = switch tab {
+        case .general:
+            generalView()
+        case .scrolling:
+            scrollingView()
+        case .apps:
+            appsView()
+        case .about:
+            aboutView()
+        }
+        content.translatesAutoresizingMaskIntoConstraints = false
+        contentContainer.addSubview(content)
+        NSLayoutConstraint.activate([
+            content.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor),
+            content.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor),
+            content.topAnchor.constraint(equalTo: contentContainer.topAnchor)
+        ])
+        refresh()
+        contentContainer.layoutSubtreeIfNeeded()
+    }
+
+    private func resizeWindow(
+        to contentSize: NSSize,
+        animated: Bool
+    ) {
+        guard let window = view.window else {
+            view.setFrameSize(contentSize)
+            return
+        }
+        let targetFrameSize = window.frameRect(forContentRect: NSRect(origin: .zero, size: contentSize)).size
+        var targetFrame = window.frame
+        let topY = targetFrame.maxY
+        targetFrame.size = targetFrameSize
+        targetFrame.origin.y = topY - targetFrameSize.height
+
+        guard animated else {
+            window.setFrame(targetFrame, display: true)
+            return
+        }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.16
+            window.animator().setFrame(targetFrame, display: true)
+        }
+    }
+
+    private func contentStack() -> NSStackView {
         let stack = NSStackView()
         stack.orientation = .vertical
         stack.alignment = .leading
