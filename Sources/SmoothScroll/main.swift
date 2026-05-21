@@ -189,6 +189,36 @@ final class SettingsStore {
     func resetScrolling() {
         pixelsPerWheelStep = 72.0
         timeConstant = 0.18
+        verticalMultiplier = 1.0
+        horizontalMultiplier = 1.0
+        acceleration = 0.0
+        reverseVertical = false
+        reverseHorizontal = false
+    }
+
+    fileprivate func applyPreset(_ preset: ScrollPreset) {
+        pixelsPerWheelStep = preset.pixelsPerWheelStep
+        timeConstant = preset.timeConstant
+        verticalMultiplier = 1.0
+        horizontalMultiplier = 1.0
+        acceleration = preset.acceleration
+    }
+
+    func addExcludedBundleIdentifier(_ bundleIdentifier: String) {
+        var bundleIdentifiers = excludedBundleIdentifiers
+        guard !bundleIdentifiers.contains(bundleIdentifier) else {
+            return
+        }
+        bundleIdentifiers.append(bundleIdentifier)
+        excludedBundleIdentifiers = bundleIdentifiers
+    }
+
+    func removeExcludedBundleIdentifier(_ bundleIdentifier: String) {
+        excludedBundleIdentifiers = excludedBundleIdentifiers.filter { $0 != bundleIdentifier }
+    }
+
+    func isExcluded(bundleIdentifier: String) -> Bool {
+        excludedBundleIdentifiers.contains(bundleIdentifier)
     }
 
     private func bool(forKey key: String, defaultValue: Bool) -> Bool {
@@ -205,14 +235,92 @@ final class SettingsStore {
         return defaults.double(forKey: key)
     }
 
+    private func string(forKey key: String, defaultValue: String) -> String {
+        guard let value = defaults.string(forKey: key) else {
+            return defaultValue
+        }
+        return value
+    }
+
+    private func stringArray(forKey key: String, defaultValue: [String]) -> [String] {
+        guard let value = defaults.stringArray(forKey: key) else {
+            return defaultValue
+        }
+        return value
+    }
+
     private func set(_ value: Bool, forKey key: String) {
         defaults.set(value, forKey: key)
-        onChange?()
+        notifyChange()
     }
 
     private func set(_ value: Double, forKey key: String) {
         defaults.set(value, forKey: key)
+        notifyChange()
+    }
+
+    private func set(_ value: String, forKey key: String) {
+        defaults.set(value, forKey: key)
+        notifyChange()
+    }
+
+    private func notifyChange() {
         onChange?()
+        NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
+    }
+}
+
+final class ApplicationMonitor: NSObject {
+    var onChange: (() -> Void)?
+
+    private let ownBundleIdentifier = Bundle.main.bundleIdentifier
+    private(set) var lastApplication: NSRunningApplication?
+
+    override init() {
+        super.init()
+        remember(NSWorkspace.shared.frontmostApplication)
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(applicationDidActivate(_:)),
+            name: NSWorkspace.didActivateApplicationNotification,
+            object: nil
+        )
+    }
+
+    deinit {
+        NSWorkspace.shared.notificationCenter.removeObserver(self)
+    }
+
+    var currentTargetApplication: NSRunningApplication? {
+        let frontmostApplication = NSWorkspace.shared.frontmostApplication
+        if isUserApplication(frontmostApplication) {
+            return frontmostApplication
+        }
+        return lastApplication
+    }
+
+    var currentTargetBundleIdentifier: String? {
+        currentTargetApplication?.bundleIdentifier
+    }
+
+    @objc private func applicationDidActivate(_ notification: Notification) {
+        let application = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+        remember(application)
+    }
+
+    private func remember(_ application: NSRunningApplication?) {
+        guard isUserApplication(application) else {
+            return
+        }
+        lastApplication = application
+        onChange?()
+    }
+
+    private func isUserApplication(_ application: NSRunningApplication?) -> Bool {
+        guard let application, application.bundleIdentifier != ownBundleIdentifier else {
+            return false
+        }
+        return application.activationPolicy == .regular
     }
 }
 
