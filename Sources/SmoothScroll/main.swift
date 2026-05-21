@@ -719,21 +719,20 @@ final class StatusBarController {
     init(
         settings: SettingsStore,
         scrollController: ScrollController,
-        launchAgentManager: LaunchAgentManager
+        launchAgentManager: LaunchAgentManager,
+        applicationMonitor: ApplicationMonitor
     ) {
         self.settings = settings
         self.scrollController = scrollController
         self.launchAgentManager = launchAgentManager
+        self.applicationMonitor = applicationMonitor
 
-        let viewController = SettingsViewController(
+        settingsWindowController = SettingsWindowController(
             settings: settings,
             scrollController: scrollController,
-            launchAgentManager: launchAgentManager
+            launchAgentManager: launchAgentManager,
+            applicationMonitor: applicationMonitor
         )
-
-        popover.behavior = .transient
-        popover.contentSize = NSSize(width: 300, height: 250)
-        popover.contentViewController = viewController
 
         if let button = statusItem.button {
             button.image = NSImage(
