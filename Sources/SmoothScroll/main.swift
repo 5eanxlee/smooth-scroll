@@ -1899,35 +1899,137 @@ final class SettingsViewController: NSViewController {
         row.widthAnchor.constraint(equalToConstant: contentWidth).isActive = true
 
         let titleLabel = NSTextField(labelWithString: title)
-        valueLabel.alignment = .right
-        valueLabel.textColor = .secondaryLabelColor
+        titleLabel.font = .preferredFont(forTextStyle: .body)
+        titleLabel.widthAnchor.constraint(equalToConstant: 138).isActive = true
 
-        labelRow.addArrangedSubview(titleLabel)
-        labelRow.addArrangedSubview(valueLabel)
-        labelRow.widthAnchor.constraint(equalToConstant: 264).isActive = true
-        valueLabel.widthAnchor.constraint(equalToConstant: 72).isActive = true
+        row.addArrangedSubview(titleLabel)
+        row.addArrangedSubview(popup)
+        return row
+    }
 
-        slider.minValue = minValue
-        slider.maxValue = maxValue
-        slider.target = self
-        slider.action = action
-        slider.isContinuous = true
-        slider.translatesAutoresizingMaskIntoConstraints = false
-        slider.widthAnchor.constraint(equalToConstant: 264).isActive = true
+    private func commandRow(buttons: [NSButton]) -> NSView {
+        let buttonRow = NSStackView()
+        buttonRow.orientation = .horizontal
+        buttonRow.spacing = 8
+        buttonRow.distribution = .fillEqually
+        buttonRow.translatesAutoresizingMaskIntoConstraints = false
+        buttonRow.widthAnchor.constraint(equalToConstant: contentWidth).isActive = true
+        for button in buttons {
+            buttonRow.addArrangedSubview(button)
+        }
+        return buttonRow
+    }
 
-        container.addArrangedSubview(labelRow)
-        container.addArrangedSubview(slider)
-        return container
+    private func linkGrid(_ buttons: [NSView]) -> NSView {
+        let row = NSStackView()
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 28
+        row.widthAnchor.constraint(equalToConstant: contentWidth).isActive = true
+        for button in buttons {
+            button.widthAnchor.constraint(equalToConstant: 190).isActive = true
+            row.addArrangedSubview(button)
+        }
+        return row
+    }
+
+    private func actionButton(_ title: String, action: Selector) -> NSButton {
+        let button = NSButton(title: title, target: self, action: action)
+        button.bezelStyle = .rounded
+        return button
+    }
+
+    private func linkButton(title: String, symbolName: String, onClick: @escaping () -> Void) -> LinkButton {
+        LinkButton(title: title, symbolName: symbolName, onClick: onClick)
+    }
+
+    private func numberRow(
+        title: String,
+        minValue: Double,
+        maxValue: Double,
+        step: Double,
+        decimals: Int,
+        suffix: String,
+        onChange: @escaping (Double) -> Void
+    ) -> NumberInputRow {
+        let row = NumberInputRow(
+            title: title,
+            minValue: minValue,
+            maxValue: maxValue,
+            step: step,
+            decimals: decimals,
+            suffix: suffix
+        )
+        row.onValueChange = onChange
+        return row
+    }
+
+    private func configureBypassPopup() {
+        configureModifierPopup(bypassPopup, action: #selector(bypassModifierChanged))
+    }
+
+    private func configureModifierPopup(_ popup: NSPopUpButton, action: Selector) {
+        guard popup.numberOfItems == 0 else {
+            return
+        }
+        popup.translatesAutoresizingMaskIntoConstraints = false
+        popup.widthAnchor.constraint(equalToConstant: 166).isActive = true
+        for modifier in BypassModifier.allCases {
+            popup.addItem(withTitle: modifier.title)
+            popup.lastItem?.representedObject = modifier.rawValue
+        }
+        popup.target = self
+        popup.action = action
     }
 
     private func refresh() {
-        statusLabel.stringValue = "Smooth Scroll: \(scrollController.status.title)"
-        enabledButton.state = settings.enabled ? .on : .off
+        versionLabel.stringValue = "Version \(appVersion)"
+        currentAppLabel.stringValue = currentTargetApplicationTitle()
         launchAtLoginButton.state = settings.launchAtLogin ? .on : .off
         launchAtLoginButton.isEnabled = launchAgentManager.canInstallForCurrentBundle
+        showInMenuBarButton.state = settings.showInMenuBar ? .on : .off
 
-        strengthSlider.doubleValue = settings.pixelsPerWheelStep
-        smoothnessSlider.doubleValue = settings.timeConstant
+        strengthRow?.setValue(settings.pixelsPerWheelStep)
+        smoothnessRow?.setValue(settings.timeConstant * 1000.0)
+        verticalRow?.setValue(settings.verticalMultiplier * 100.0)
+        horizontalRow?.setValue(settings.horizontalMultiplier * 100.0)
+        accelerationRow?.setValue(settings.acceleration * 100.0)
+
+        let selectedPresetIndex = selectedPresetIndex()
+        presetPopup.selectItem(withTitle: selectedPresetIndex >= 0 ? ScrollPreset.all[selectedPresetIndex].title : "Custom")
+        bypassPopup.selectItem(withTitle: settings.bypassModifier.title)
+        precisionPopup.selectItem(withTitle: settings.precisionModifier.title)
+        boostPopup.selectItem(withTitle: settings.boostModifier.title)
+        reverseVerticalButton.state = settings.reverseVertical ? .on : .off
+        reverseHorizontalButton.state = settings.reverseHorizontal ? .on : .off
+        refreshExcludedAppsPopup()
+        refreshAccessibilityStatus()
+    }
+
+    private func selectedPresetIndex() -> Int {
+        let currentPreset = ScrollPreset(
+            title: "",
+            pixelsPerWheelStep: settings.pixelsPerWheelStep,
+            timeConstant: settings.timeConstant,
+            acceleration: settings.acceleration
+        )
+        guard let index = ScrollPreset.all.firstIndex(where: { preset in
+            abs(preset.pixelsPerWheelStep - currentPreset.pixelsPerWheelStep) < 0.5 &&
+                abs(preset.timeConstant - currentPreset.timeConstant) < 0.001 &&
+                abs(preset.acceleration - currentPreset.acceleration) < 0.001 &&
+                abs(settings.verticalMultiplier - 1.0) < 0.001 &&
+                abs(settings.horizontalMultiplier - 1.0) < 0.001
+        }) else {
+            return -1
+        }
+        return index
+    }
+
+    private var appVersion: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.0"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
+        return "\(version) (\(build))"
+    }
 
         strengthValueLabel.stringValue = "\(Int(settings.pixelsPerWheelStep.rounded())) px"
         smoothnessValueLabel.stringValue = "\(Int((settings.timeConstant * 1000).rounded())) ms"
