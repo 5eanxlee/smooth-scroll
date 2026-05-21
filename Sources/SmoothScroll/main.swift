@@ -1687,31 +1687,216 @@ final class SettingsViewController: NSViewController {
             NSButton(title: "Remove", target: self, action: #selector(removeSelectedAppExclusion))
         ]))
 
-        refresh()
+        excludedAppsPopup.translatesAutoresizingMaskIntoConstraints = false
+        excludedAppsPopup.widthAnchor.constraint(equalToConstant: contentWidth).isActive = true
+        stack.addArrangedSubview(labelledControl(title: "Excluded Apps", control: excludedAppsPopup))
+
+        return wrapped(stack)
     }
 
-    override func viewWillAppear() {
-        super.viewWillAppear()
-        refresh()
+    private func advancedView() -> NSView {
+        let stack = contentStack()
+
+        verticalRow = numberRow(
+            title: "Vertical",
+            minValue: 25,
+            maxValue: 200,
+            step: 5,
+            decimals: 0,
+            suffix: "%"
+        ) { [weak self] value in
+            self?.settings.verticalMultiplier = value / 100.0
+            self?.scrollController.applySettings()
+            self?.refresh()
+        }
+        stack.addArrangedSubview(verticalRow)
+
+        horizontalRow = numberRow(
+            title: "Horizontal",
+            minValue: 25,
+            maxValue: 200,
+            step: 5,
+            decimals: 0,
+            suffix: "%"
+        ) { [weak self] value in
+            self?.settings.horizontalMultiplier = value / 100.0
+            self?.scrollController.applySettings()
+            self?.refresh()
+        }
+        stack.addArrangedSubview(horizontalRow)
+
+        accelerationRow = numberRow(
+            title: "Acceleration",
+            minValue: 0,
+            maxValue: 200,
+            step: 5,
+            decimals: 0,
+            suffix: "%"
+        ) { [weak self] value in
+            self?.settings.acceleration = value / 100.0
+            self?.scrollController.applySettings()
+            self?.refresh()
+        }
+        stack.addArrangedSubview(accelerationRow)
+
+        reverseVerticalButton.setButtonType(.switch)
+        reverseVerticalButton.title = "Reverse Vertical"
+        reverseVerticalButton.target = self
+        reverseVerticalButton.action = #selector(reverseVerticalChanged)
+        stack.addArrangedSubview(reverseVerticalButton)
+
+        reverseHorizontalButton.setButtonType(.switch)
+        reverseHorizontalButton.title = "Reverse Horizontal"
+        reverseHorizontalButton.target = self
+        reverseHorizontalButton.action = #selector(reverseHorizontalChanged)
+        stack.addArrangedSubview(reverseHorizontalButton)
+
+        configureBypassPopup()
+        stack.addArrangedSubview(labelledControl(title: "Bypass Key", control: bypassPopup))
+
+        configureModifierPopup(precisionPopup, action: #selector(precisionModifierChanged))
+        stack.addArrangedSubview(labelledControl(title: "Precision Key", control: precisionPopup))
+
+        configureModifierPopup(boostPopup, action: #selector(boostModifierChanged))
+        stack.addArrangedSubview(labelledControl(title: "Boost Key", control: boostPopup))
+
+        return wrapped(stack)
     }
 
-    private func sliderRow(
-        title: String,
-        slider: NSSlider,
-        valueLabel: NSTextField,
-        minValue: Double,
-        maxValue: Double,
-        action: Selector
-    ) -> NSView {
+    private func aboutView() -> NSView {
+        let stack = contentStack()
+        stack.alignment = .centerX
+        stack.spacing = 16
+
+        let header = NSStackView()
+        header.orientation = .vertical
+        header.alignment = .centerX
+        header.spacing = 5
+
+        let imageView = NSImageView(image: AppIcon.largeImage())
+        imageView.widthAnchor.constraint(equalToConstant: 52).isActive = true
+        imageView.heightAnchor.constraint(equalToConstant: 52).isActive = true
+
+        let title = NSTextField(labelWithString: "Mouse++")
+        title.font = .systemFont(ofSize: 17, weight: .semibold)
+        title.alignment = .center
+        versionLabel.textColor = .secondaryLabelColor
+        versionLabel.alignment = .center
+
+        header.addArrangedSubview(imageView)
+        header.addArrangedSubview(title)
+        header.addArrangedSubview(versionLabel)
+        stack.addArrangedSubview(header)
+
+        stack.addArrangedSubview(linkGrid([
+            linkButton(title: "Update Mouse++", symbolName: "arrow.down.circle") { [weak self] in
+                self?.runUpdater()
+            },
+            linkButton(title: "GitHub", symbolName: "chevron.left.forwardslash.chevron.right") { [weak self] in
+                self?.openGitHub()
+            }
+        ]))
+
+        return wrapped(stack)
+    }
+
+    private func presetRow() -> NSView {
+        let container = NSStackView()
+        container.orientation = .horizontal
+        container.spacing = 8
+        container.alignment = .centerY
+        container.widthAnchor.constraint(equalToConstant: contentWidth).isActive = true
+
+        let titleLabel = NSTextField(labelWithString: "Preset")
+        titleLabel.widthAnchor.constraint(equalToConstant: 138).isActive = true
+
+        configurePresetPopup()
+        container.addArrangedSubview(titleLabel)
+        container.addArrangedSubview(presetPopup)
+        return container
+    }
+
+    private func configurePresetPopup() {
+        guard presetPopup.numberOfItems == 0 else {
+            return
+        }
+        presetPopup.translatesAutoresizingMaskIntoConstraints = false
+        presetPopup.widthAnchor.constraint(equalToConstant: 166).isActive = true
+        presetPopup.addItem(withTitle: "Custom")
+        presetPopup.lastItem?.representedObject = -1
+        for (index, preset) in ScrollPreset.all.enumerated() {
+            presetPopup.addItem(withTitle: preset.title)
+            presetPopup.lastItem?.representedObject = index
+        }
+        presetPopup.target = self
+        presetPopup.action = #selector(presetChanged)
+    }
+
+    private func accessibilityRow() -> NSView {
+        let row = NSStackView()
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 8
+        row.widthAnchor.constraint(equalToConstant: contentWidth).isActive = true
+
+        let icon = NSImageView()
+        icon.image = NSImage(systemSymbolName: "exclamationmark.triangle.fill", accessibilityDescription: nil)
+        icon.contentTintColor = .systemOrange
+        icon.widthAnchor.constraint(equalToConstant: 16).isActive = true
+        icon.heightAnchor.constraint(equalToConstant: 16).isActive = true
+
+        let title = NSTextField(labelWithString: "Accessibility access required")
+        title.font = .systemFont(ofSize: 13, weight: .medium)
+
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
+        let button = NSButton(title: "Open Settings", target: self, action: #selector(openPrivacySettings))
+
+        row.addArrangedSubview(icon)
+        row.addArrangedSubview(title)
+        row.addArrangedSubview(spacer)
+        row.addArrangedSubview(button)
+        accessibilityRows.append(row)
+        return row
+    }
+
+    private func sectionRow(title: String, valueLabel: NSTextField, trailing: NSView?) -> NSView {
+        let row = NSStackView()
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 8
+        row.widthAnchor.constraint(equalToConstant: contentWidth).isActive = true
+
+        let titleLabel = NSTextField(labelWithString: title)
+        titleLabel.widthAnchor.constraint(equalToConstant: 110).isActive = true
+        valueLabel.textColor = .secondaryLabelColor
+        valueLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        row.addArrangedSubview(titleLabel)
+        row.addArrangedSubview(valueLabel)
+        if let trailing {
+            row.addArrangedSubview(trailing)
+        }
+        return row
+    }
+
+    private func labelledControl(title: String, control: NSView) -> NSView {
         let container = NSStackView()
         container.orientation = .vertical
         container.spacing = 4
         container.alignment = .leading
+        container.addArrangedSubview(NSTextField(labelWithString: title))
+        container.addArrangedSubview(control)
+        return container
+    }
 
-        let labelRow = NSStackView()
-        labelRow.orientation = .horizontal
-        labelRow.alignment = .centerY
-        labelRow.spacing = 8
+    private func popupRow(title: String, popup: NSPopUpButton) -> NSView {
+        let row = NSStackView()
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 8
+        row.widthAnchor.constraint(equalToConstant: contentWidth).isActive = true
 
         let titleLabel = NSTextField(labelWithString: title)
         valueLabel.alignment = .right
