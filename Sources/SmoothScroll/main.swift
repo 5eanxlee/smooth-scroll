@@ -8,11 +8,82 @@ private enum DefaultsKey {
     static let enabled = "enabled"
     static let pixelsPerWheelStep = "pixelsPerWheelStep"
     static let timeConstant = "timeConstant"
+    static let verticalMultiplier = "verticalMultiplier"
+    static let horizontalMultiplier = "horizontalMultiplier"
+    static let acceleration = "acceleration"
+    static let reverseVertical = "reverseVertical"
+    static let reverseHorizontal = "reverseHorizontal"
+    static let bypassModifier = "bypassModifier"
+    static let precisionModifier = "precisionModifier"
+    static let boostModifier = "boostModifier"
+    static let showInMenuBar = "showInMenuBar"
+    static let excludedBundleIdentifiers = "excludedBundleIdentifiers"
     static let launchAtLogin = "launchAtLogin"
     static let launchAgentConfigured = "launchAgentConfigured"
 }
 
+fileprivate enum BypassModifier: String, CaseIterable {
+    case none
+    case shift
+    case option
+    case control
+    case command
+
+    var title: String {
+        switch self {
+        case .none:
+            "None"
+        case .shift:
+            "Shift"
+        case .option:
+            "Option"
+        case .control:
+            "Control"
+        case .command:
+            "Command"
+        }
+    }
+
+    var eventFlag: CGEventFlags? {
+        switch self {
+        case .none:
+            nil
+        case .shift:
+            .maskShift
+        case .option:
+            .maskAlternate
+        case .control:
+            .maskControl
+        case .command:
+            .maskCommand
+        }
+    }
+
+    func matches(_ flags: CGEventFlags) -> Bool {
+        guard let eventFlag else {
+            return false
+        }
+        return flags.contains(eventFlag)
+    }
+}
+
+fileprivate struct ScrollPreset: Equatable {
+    let title: String
+    let pixelsPerWheelStep: Double
+    let timeConstant: Double
+    let acceleration: Double
+
+    static let all: [ScrollPreset] = [
+        ScrollPreset(title: "Precise", pixelsPerWheelStep: 48.0, timeConstant: 0.12, acceleration: 0.0),
+        ScrollPreset(title: "Balanced", pixelsPerWheelStep: 72.0, timeConstant: 0.18, acceleration: 0.0),
+        ScrollPreset(title: "Fast", pixelsPerWheelStep: 120.0, timeConstant: 0.16, acceleration: 0.35),
+        ScrollPreset(title: "Glide", pixelsPerWheelStep: 88.0, timeConstant: 0.32, acceleration: 0.15)
+    ]
+}
+
 final class SettingsStore {
+    static let didChangeNotification = Notification.Name("SettingsStoreDidChangeNotification")
+
     private let defaults = UserDefaults(suiteName: "com.local.SmoothScroll") ?? .standard
 
     var onChange: (() -> Void)?
@@ -32,6 +103,69 @@ final class SettingsStore {
         set { set(newValue.clamped(to: 0.06 ... 0.50), forKey: DefaultsKey.timeConstant) }
     }
 
+    var verticalMultiplier: Double {
+        get { double(forKey: DefaultsKey.verticalMultiplier, defaultValue: 1.0) }
+        set { set(newValue.clamped(to: 0.25 ... 2.0), forKey: DefaultsKey.verticalMultiplier) }
+    }
+
+    var horizontalMultiplier: Double {
+        get { double(forKey: DefaultsKey.horizontalMultiplier, defaultValue: 1.0) }
+        set { set(newValue.clamped(to: 0.25 ... 2.0), forKey: DefaultsKey.horizontalMultiplier) }
+    }
+
+    var acceleration: Double {
+        get { double(forKey: DefaultsKey.acceleration, defaultValue: 0.0) }
+        set { set(newValue.clamped(to: 0.0 ... 2.0), forKey: DefaultsKey.acceleration) }
+    }
+
+    var reverseVertical: Bool {
+        get { bool(forKey: DefaultsKey.reverseVertical, defaultValue: false) }
+        set { set(newValue, forKey: DefaultsKey.reverseVertical) }
+    }
+
+    var reverseHorizontal: Bool {
+        get { bool(forKey: DefaultsKey.reverseHorizontal, defaultValue: false) }
+        set { set(newValue, forKey: DefaultsKey.reverseHorizontal) }
+    }
+
+    fileprivate var bypassModifier: BypassModifier {
+        get {
+            let rawValue = string(forKey: DefaultsKey.bypassModifier, defaultValue: BypassModifier.option.rawValue)
+            return BypassModifier(rawValue: rawValue) ?? .option
+        }
+        set { set(newValue.rawValue, forKey: DefaultsKey.bypassModifier) }
+    }
+
+    fileprivate var precisionModifier: BypassModifier {
+        get {
+            let rawValue = string(forKey: DefaultsKey.precisionModifier, defaultValue: BypassModifier.shift.rawValue)
+            return BypassModifier(rawValue: rawValue) ?? .shift
+        }
+        set { set(newValue.rawValue, forKey: DefaultsKey.precisionModifier) }
+    }
+
+    fileprivate var boostModifier: BypassModifier {
+        get {
+            let rawValue = string(forKey: DefaultsKey.boostModifier, defaultValue: BypassModifier.command.rawValue)
+            return BypassModifier(rawValue: rawValue) ?? .command
+        }
+        set { set(newValue.rawValue, forKey: DefaultsKey.boostModifier) }
+    }
+
+    var showInMenuBar: Bool {
+        get { bool(forKey: DefaultsKey.showInMenuBar, defaultValue: true) }
+        set { set(newValue, forKey: DefaultsKey.showInMenuBar) }
+    }
+
+    var excludedBundleIdentifiers: [String] {
+        get { stringArray(forKey: DefaultsKey.excludedBundleIdentifiers, defaultValue: []) }
+        set {
+            let normalized = Array(Set(newValue.filter { !$0.isEmpty })).sorted()
+            defaults.set(normalized, forKey: DefaultsKey.excludedBundleIdentifiers)
+            notifyChange()
+        }
+    }
+
     var launchAtLogin: Bool {
         get { bool(forKey: DefaultsKey.launchAtLogin, defaultValue: true) }
         set { set(newValue, forKey: DefaultsKey.launchAtLogin) }
@@ -45,7 +179,10 @@ final class SettingsStore {
     var physicsConfiguration: ScrollPhysicsConfiguration {
         ScrollPhysicsConfiguration(
             pixelsPerWheelStep: pixelsPerWheelStep,
-            timeConstant: timeConstant
+            timeConstant: timeConstant,
+            verticalMultiplier: verticalMultiplier,
+            horizontalMultiplier: horizontalMultiplier,
+            acceleration: acceleration
         )
     }
 
