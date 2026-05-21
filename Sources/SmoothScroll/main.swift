@@ -659,12 +659,15 @@ final class LaunchAgentManager {
         else {
             return []
         }
-        return path
+        return arguments
     }
 
     func installForCurrentBundle() throws {
         guard canInstallForCurrentBundle else {
             throw CocoaError(.featureUnsupported)
+        }
+        guard let executablePath = Bundle.main.executablePath else {
+            throw CocoaError(.fileNoSuchFile)
         }
 
         let directory = agentURL.deletingLastPathComponent()
@@ -673,9 +676,8 @@ final class LaunchAgentManager {
         let plist: [String: Any] = [
             "Label": label,
             "ProgramArguments": [
-                "/usr/bin/open",
-                "-g",
-                Bundle.main.bundleURL.path
+                executablePath,
+                "--background"
             ],
             "RunAtLoad": true,
             "KeepAlive": false
@@ -707,10 +709,12 @@ final class LaunchAgentManager {
 @MainActor
 final class StatusBarController {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-    private let popover = NSPopover()
     private let settings: SettingsStore
     private let scrollController: ScrollController
     private let launchAgentManager: LaunchAgentManager
+    private let applicationMonitor: ApplicationMonitor
+    private let settingsWindowController: SettingsWindowController
+    private var settingsObserver: Any?
 
     init(
         settings: SettingsStore,
