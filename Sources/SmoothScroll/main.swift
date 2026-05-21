@@ -1562,24 +1562,114 @@ final class SettingsViewController: NSViewController {
         let label = NSTextField(labelWithString: title)
         label.font = .systemFont(ofSize: 14, weight: .semibold)
 
-        statusLabel.font = .preferredFont(forTextStyle: .headline)
-        statusLabel.lineBreakMode = .byTruncatingTail
-        stack.addArrangedSubview(statusLabel)
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        enabledButton.setButtonType(.switch)
-        enabledButton.title = "Enabled"
-        enabledButton.target = self
-        enabledButton.action = #selector(enabledChanged)
-        stack.addArrangedSubview(enabledButton)
+        row.addArrangedSubview(label)
+        row.addArrangedSubview(spacer)
+        row.addArrangedSubview(control)
+        return row
+    }
 
-        stack.addArrangedSubview(sliderRow(
+    private func scrollingView() -> NSView {
+        let stack = contentStack()
+
+        stack.addArrangedSubview(presetRow())
+
+        smoothnessRow = numberRow(
+            title: "Smoothness",
+            minValue: 60,
+            maxValue: 500,
+            step: 10,
+            decimals: 0,
+            suffix: "ms"
+        ) { [weak self] value in
+            self?.settings.timeConstant = value / 1000.0
+            self?.scrollController.applySettings()
+            self?.refresh()
+        }
+        stack.addArrangedSubview(smoothnessRow)
+
+        strengthRow = numberRow(
             title: "Strength",
-            slider: strengthSlider,
-            valueLabel: strengthValueLabel,
             minValue: 24,
             maxValue: 180,
-            action: #selector(strengthChanged)
-        ))
+            step: 1,
+            decimals: 0,
+            suffix: "px"
+        ) { [weak self] value in
+            self?.settings.pixelsPerWheelStep = value
+            self?.scrollController.applySettings()
+            self?.refresh()
+        }
+        stack.addArrangedSubview(strengthRow)
+
+        verticalRow = numberRow(
+            title: "Vertical",
+            minValue: 25,
+            maxValue: 200,
+            step: 5,
+            decimals: 0,
+            suffix: "%"
+        ) { [weak self] value in
+            self?.settings.verticalMultiplier = value / 100.0
+            self?.scrollController.applySettings()
+            self?.refresh()
+        }
+        stack.addArrangedSubview(verticalRow)
+
+        horizontalRow = numberRow(
+            title: "Horizontal",
+            minValue: 25,
+            maxValue: 200,
+            step: 5,
+            decimals: 0,
+            suffix: "%"
+        ) { [weak self] value in
+            self?.settings.horizontalMultiplier = value / 100.0
+            self?.scrollController.applySettings()
+            self?.refresh()
+        }
+        stack.addArrangedSubview(horizontalRow)
+
+        accelerationRow = numberRow(
+            title: "Acceleration",
+            minValue: 0,
+            maxValue: 200,
+            step: 5,
+            decimals: 0,
+            suffix: "%"
+        ) { [weak self] value in
+            self?.settings.acceleration = value / 100.0
+            self?.scrollController.applySettings()
+            self?.refresh()
+        }
+        stack.addArrangedSubview(accelerationRow)
+
+        let reverseRow = NSStackView()
+        reverseRow.orientation = .horizontal
+        reverseRow.spacing = 28
+        reverseRow.alignment = .centerY
+        reverseVerticalButton.setButtonType(.switch)
+        reverseVerticalButton.title = "Reverse Vertical"
+        reverseVerticalButton.target = self
+        reverseVerticalButton.action = #selector(reverseVerticalChanged)
+        reverseHorizontalButton.setButtonType(.switch)
+        reverseHorizontalButton.title = "Reverse Horizontal"
+        reverseHorizontalButton.target = self
+        reverseHorizontalButton.action = #selector(reverseHorizontalChanged)
+        reverseRow.addArrangedSubview(reverseVerticalButton)
+        reverseRow.addArrangedSubview(reverseHorizontalButton)
+        stack.addArrangedSubview(reverseRow)
+
+        configureBypassPopup()
+        stack.addArrangedSubview(popupRow(title: "Bypass", popup: bypassPopup))
+        configureModifierPopup(precisionPopup, action: #selector(precisionModifierChanged))
+        stack.addArrangedSubview(popupRow(title: "Precision", popup: precisionPopup))
+        configureModifierPopup(boostPopup, action: #selector(boostModifierChanged))
+        stack.addArrangedSubview(popupRow(title: "Swift", popup: boostPopup))
+
+        stack.addArrangedSubview(actionButton("Reset Scrolling", action: #selector(resetScrolling)))
 
         stack.addArrangedSubview(sliderRow(
             title: "Smoothness",
