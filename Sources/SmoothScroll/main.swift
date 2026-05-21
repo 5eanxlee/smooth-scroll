@@ -1517,17 +1517,50 @@ final class SettingsViewController: NSViewController {
         let stack = NSStackView()
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 12
+        stack.spacing = 9
         stack.translatesAutoresizingMaskIntoConstraints = false
-        stack.setHuggingPriority(.required, for: .vertical)
-        view.addSubview(stack)
+        return stack
+    }
 
+    private func wrapped(_ stack: NSStackView) -> NSView {
+        let container = NSView()
+        container.addSubview(stack)
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 18),
-            stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -18),
-            stack.topAnchor.constraint(equalTo: view.topAnchor, constant: 18),
-            stack.bottomAnchor.constraint(lessThanOrEqualTo: view.bottomAnchor, constant: -18)
+            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 52),
+            stack.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -52),
+            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: 22),
+            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -20)
         ])
+        return container
+    }
+
+    private func generalView() -> NSView {
+        let stack = contentStack()
+
+        launchAtLoginButton.target = self
+        launchAtLoginButton.action = #selector(launchAtLoginChanged)
+        stack.addArrangedSubview(toggleRow(title: "Launch at Login", control: launchAtLoginButton))
+
+        showInMenuBarButton.target = self
+        showInMenuBarButton.action = #selector(showInMenuBarChanged)
+        stack.addArrangedSubview(toggleRow(title: "Show in Menu Bar", control: showInMenuBarButton))
+
+        stack.addArrangedSubview(accessibilityRow())
+        currentAppLabel.lineBreakMode = .byTruncatingMiddle
+        stack.addArrangedSubview(sectionRow(title: "Current App", valueLabel: currentAppLabel, trailing: nil))
+
+        return wrapped(stack)
+    }
+
+    private func toggleRow(title: String, control: NSSwitch) -> NSView {
+        let row = NSStackView()
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 8
+        row.widthAnchor.constraint(equalToConstant: contentWidth).isActive = true
+
+        let label = NSTextField(labelWithString: title)
+        label.font = .systemFont(ofSize: 14, weight: .semibold)
 
         statusLabel.font = .preferredFont(forTextStyle: .headline)
         statusLabel.lineBreakMode = .byTruncatingTail
