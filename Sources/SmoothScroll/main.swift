@@ -1671,48 +1671,21 @@ final class SettingsViewController: NSViewController {
 
         stack.addArrangedSubview(actionButton("Reset Scrolling", action: #selector(resetScrolling)))
 
-        stack.addArrangedSubview(sliderRow(
-            title: "Smoothness",
-            slider: smoothnessSlider,
-            valueLabel: smoothnessValueLabel,
-            minValue: 0.06,
-            maxValue: 0.50,
-            action: #selector(smoothnessChanged)
-        ))
+        return wrapped(stack)
+    }
 
-        launchAtLoginButton.setButtonType(.switch)
-        launchAtLoginButton.title = "Launch at Login"
-        launchAtLoginButton.target = self
-        launchAtLoginButton.action = #selector(launchAtLoginChanged)
-        stack.addArrangedSubview(launchAtLoginButton)
+    private func appsView() -> NSView {
+        let stack = contentStack()
 
-        let buttonRow = NSStackView()
-        buttonRow.orientation = .horizontal
-        buttonRow.spacing = 8
-        buttonRow.distribution = .fillEqually
-        buttonRow.translatesAutoresizingMaskIntoConstraints = false
-
-        let privacyButton = NSButton(
-            title: "Privacy Settings",
+        stack.addArrangedSubview(sectionRow(title: "Current App", valueLabel: currentAppLabel, trailing: NSButton(
+            title: "Exclude",
             target: self,
-            action: #selector(openPrivacySettings)
-        )
-        let resetButton = NSButton(
-            title: "Reset",
-            target: self,
-            action: #selector(resetScrolling)
-        )
-        let quitButton = NSButton(
-            title: "Quit",
-            target: self,
-            action: #selector(quit)
-        )
+            action: #selector(addCurrentAppExclusion)
+        )))
 
-        buttonRow.addArrangedSubview(privacyButton)
-        buttonRow.addArrangedSubview(resetButton)
-        buttonRow.addArrangedSubview(quitButton)
-        stack.addArrangedSubview(buttonRow)
-        buttonRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        stack.addArrangedSubview(commandRow(buttons: [
+            NSButton(title: "Remove", target: self, action: #selector(removeSelectedAppExclusion))
+        ]))
 
         refresh()
     }
