@@ -735,26 +735,33 @@ final class StatusBarController {
         )
 
         if let button = statusItem.button {
-            button.image = NSImage(
-                systemSymbolName: "arrow.up.and.down.circle",
-                accessibilityDescription: "Smooth Scroll"
-            )
+            button.image = AppIcon.statusImage()
             button.target = self
-            button.action = #selector(togglePopover)
+            button.action = #selector(handleStatusItemClick)
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
 
         scrollController.addStatusObserver { [weak self] status in
             self?.updateStatusIcon(for: status)
         }
+        settingsObserver = NotificationCenter.default.addObserver(
+            forName: SettingsStore.didChangeNotification,
+            object: settings,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.refreshStatusItem()
+            }
+        }
         updateStatusIcon(for: scrollController.status)
     }
 
-    @objc private func togglePopover() {
+    @objc private func handleStatusItemClick() {
         guard let button = statusItem.button else {
             return
         }
-        if popover.isShown {
-            popover.performClose(nil)
+        if NSApp.currentEvent?.type == .rightMouseUp {
+            showQuickMenu(relativeTo: button)
         } else {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             popover.contentViewController?.view.window?.makeKey()
