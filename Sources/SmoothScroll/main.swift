@@ -455,23 +455,54 @@ final class ScrollController {
             return Unmanaged.passUnretained(event)
         }
 
+        if shouldPassThrough(event: event) {
+            stopTimer()
+            engine.reset()
+            return Unmanaged.passUnretained(event)
+        }
+
         let isContinuous = event.getIntegerValueField(.scrollWheelEventIsContinuous) != 0
         if isContinuous {
             return Unmanaged.passUnretained(event)
         }
 
-        let vertical = event.getIntegerValueField(.scrollWheelEventDeltaAxis1)
-        let horizontal = event.getIntegerValueField(.scrollWheelEventDeltaAxis2)
+        var vertical = Double(event.getIntegerValueField(.scrollWheelEventDeltaAxis1))
+        var horizontal = Double(event.getIntegerValueField(.scrollWheelEventDeltaAxis2))
         guard vertical != 0 || horizontal != 0 else {
             return Unmanaged.passUnretained(event)
         }
 
+        if settings.reverseVertical {
+            vertical *= -1
+        }
+        if settings.reverseHorizontal {
+            horizontal *= -1
+        }
+
+        if settings.precisionModifier.matches(event.flags) {
+            vertical *= 0.35
+            horizontal *= 0.35
+        } else if settings.boostModifier.matches(event.flags) {
+            vertical *= 1.75
+            horizontal *= 1.75
+        }
+
         engine.addWheelDelta(
-            horizontalLines: Double(horizontal),
-            verticalLines: Double(vertical)
+            horizontalLines: horizontal,
+            verticalLines: vertical
         )
         startTimerIfNeeded()
         return nil
+    }
+
+    private func shouldPassThrough(event: CGEvent) -> Bool {
+        if settings.bypassModifier.matches(event.flags) {
+            return true
+        }
+        guard let bundleIdentifier = NSWorkspace.shared.frontmostApplication?.bundleIdentifier else {
+            return false
+        }
+        return settings.isExcluded(bundleIdentifier: bundleIdentifier)
     }
 
     private func startTimerIfNeeded() {
