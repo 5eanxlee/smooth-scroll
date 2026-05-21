@@ -615,6 +615,19 @@ private func scrollEventTapCallback(
     return controller.handle(proxy: proxy, type: type, event: event)
 }
 
+private func openPrivacySettingsURL(for status: ScrollStatus) {
+    let accessibility = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+    let inputMonitoring = "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
+    let urlStrings = status == .eventTapFailed
+        ? [inputMonitoring, accessibility]
+        : [accessibility, inputMonitoring]
+    for urlString in urlStrings {
+        if let url = URL(string: urlString), NSWorkspace.shared.open(url) {
+            break
+        }
+    }
+}
+
 final class LaunchAgentManager {
     private let label = "com.local.SmoothScroll"
 
@@ -627,18 +640,24 @@ final class LaunchAgentManager {
     }
 
     var pointsAtCurrentBundle: Bool {
-        installedBundlePath == Bundle.main.bundleURL.path
+        guard let executablePath = Bundle.main.executablePath else {
+            return false
+        }
+        return installedProgramArguments == [executablePath, "--background"]
     }
 
     var installedBundlePath: String? {
+        installedProgramArguments.first { $0.hasSuffix(".app") }
+    }
+
+    private var installedProgramArguments: [String] {
         guard
             let data = try? Data(contentsOf: agentURL),
             let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil),
             let dictionary = plist as? [String: Any],
-            let arguments = dictionary["ProgramArguments"] as? [String],
-            let path = arguments.last
+            let arguments = dictionary["ProgramArguments"] as? [String]
         else {
-            return nil
+            return []
         }
         return path
     }
