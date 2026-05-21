@@ -2031,24 +2031,120 @@ final class SettingsViewController: NSViewController {
         return "\(version) (\(build))"
     }
 
-        strengthValueLabel.stringValue = "\(Int(settings.pixelsPerWheelStep.rounded())) px"
-        smoothnessValueLabel.stringValue = "\(Int((settings.timeConstant * 1000).rounded())) ms"
+    private func refreshAccessibilityStatus() {
+        let isTrusted = AXIsProcessTrusted()
+        for row in accessibilityRows {
+            row.isHidden = isTrusted
+        }
     }
 
-    @objc private func enabledChanged() {
-        settings.enabled = enabledButton.state == .on
+    private func refreshExcludedAppsPopup() {
+        let selectedBundleIdentifier = excludedAppsPopup.selectedItem?.representedObject as? String
+        excludedAppsPopup.removeAllItems()
+        let bundleIdentifiers = settings.excludedBundleIdentifiers
+        guard !bundleIdentifiers.isEmpty else {
+            excludedAppsPopup.addItem(withTitle: "No excluded apps")
+            excludedAppsPopup.isEnabled = false
+            return
+        }
+        excludedAppsPopup.isEnabled = true
+        for bundleIdentifier in bundleIdentifiers {
+            excludedAppsPopup.addItem(withTitle: appDisplayName(for: bundleIdentifier))
+            excludedAppsPopup.lastItem?.representedObject = bundleIdentifier
+        }
+        if let selectedBundleIdentifier {
+            excludedAppsPopup.selectItem(withTitle: appDisplayName(for: selectedBundleIdentifier))
+        }
+    }
+
+    private func currentTargetApplicationTitle() -> String {
+        guard let application = applicationMonitor.currentTargetApplication else {
+            return "Unknown"
+        }
+        return application.localizedName ?? application.bundleIdentifier ?? "Unknown"
+    }
+
+    private func appDisplayName(for bundleIdentifier: String) -> String {
+        let runningApp = NSWorkspace.shared.runningApplications.first {
+            $0.bundleIdentifier == bundleIdentifier
+        }
+        guard let name = runningApp?.localizedName else {
+            return bundleIdentifier
+        }
+        return "\(name) (\(bundleIdentifier))"
+    }
+
+    @objc private func presetChanged() {
+        guard
+            let index = presetPopup.selectedItem?.representedObject as? Int,
+            ScrollPreset.all.indices.contains(index)
+        else {
+            return
+        }
+        settings.applyPreset(ScrollPreset.all[index])
         scrollController.applySettings()
         refresh()
     }
 
-    @objc private func strengthChanged() {
-        settings.pixelsPerWheelStep = strengthSlider.doubleValue
+    @objc private func bypassModifierChanged() {
+        guard
+            let rawValue = bypassPopup.selectedItem?.representedObject as? String,
+            let modifier = BypassModifier(rawValue: rawValue)
+        else {
+            return
+        }
+        settings.bypassModifier = modifier
+        refresh()
+    }
+
+    @objc private func precisionModifierChanged() {
+        guard
+            let rawValue = precisionPopup.selectedItem?.representedObject as? String,
+            let modifier = BypassModifier(rawValue: rawValue)
+        else {
+            return
+        }
+        settings.precisionModifier = modifier
+        refresh()
+    }
+
+    @objc private func boostModifierChanged() {
+        guard
+            let rawValue = boostPopup.selectedItem?.representedObject as? String,
+            let modifier = BypassModifier(rawValue: rawValue)
+        else {
+            return
+        }
+        settings.boostModifier = modifier
+        refresh()
+    }
+
+    @objc private func reverseVerticalChanged() {
+        settings.reverseVertical = reverseVerticalButton.state == .on
         scrollController.applySettings()
         refresh()
     }
 
-    @objc private func smoothnessChanged() {
-        settings.timeConstant = smoothnessSlider.doubleValue
+    @objc private func reverseHorizontalChanged() {
+        settings.reverseHorizontal = reverseHorizontalButton.state == .on
+        scrollController.applySettings()
+        refresh()
+    }
+
+    @objc private func addCurrentAppExclusion() {
+        guard let bundleIdentifier = applicationMonitor.currentTargetBundleIdentifier else {
+            return
+        }
+        settings.addExcludedBundleIdentifier(bundleIdentifier)
+        scrollController.applySettings()
+        refresh()
+    }
+
+    @objc private func removeSelectedAppExclusion() {
+        guard let bundleIdentifier = excludedAppsPopup.selectedItem?.representedObject as? String else {
+            return
+        }
+        settings.removeExcludedBundleIdentifier(bundleIdentifier)
         scrollController.applySettings()
         refresh()
     }
@@ -2069,18 +2165,42 @@ final class SettingsViewController: NSViewController {
         refresh()
     }
 
+    @objc private func showInMenuBarChanged() {
+        settings.showInMenuBar = showInMenuBarButton.state == .on
+        refresh()
+    }
+
     @objc private func openPrivacySettings() {
         scrollController.requestAccessibilityPermission()
-        let accessibility = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
-        let inputMonitoring = "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
-        let urlStrings = scrollController.status == .eventTapFailed
-            ? [inputMonitoring, accessibility]
-            : [accessibility, inputMonitoring]
-        for urlString in urlStrings {
-            if let url = URL(string: urlString), NSWorkspace.shared.open(url) {
-                break
-            }
+        openPrivacySettingsURL(for: scrollController.status)
+    }
+
+    @objc private func openGitHub() {
+        guard let url = URL(string: "https://github.com/5eanxlee/smooth-scroll") else {
+            return
         }
+        NSWorkspace.shared.open(url)
+    }
+
+    @objc private func runUpdater() {
+        do {
+            try AppUpdater.start()
+        } catch {
+            showAlert(
+                title: "Update Failed",
+                message: [error.localizedDescription, (error as? LocalizedError)?.recoverySuggestion]
+                    .compactMap { $0 }
+                    .joined(separator: "\n\n")
+            )
+        }
+    }
+
+    private func showAlert(title: String, message: String) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.alertStyle = .informational
+        alert.runModal()
     }
 
     @objc private func resetScrolling() {
@@ -2098,11 +2218,13 @@ final class SettingsViewController: NSViewController {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let settings = SettingsStore()
     private let launchAgentManager = LaunchAgentManager()
+    private let applicationMonitor = ApplicationMonitor()
     private lazy var scrollController = ScrollController(settings: settings)
     private var statusController: StatusBarController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        NSApp.applicationIconImage = AppIcon.largeImage()
         terminateDuplicateInstanceIfNeeded()
 
         settings.onChange = { [weak self] in
@@ -2114,14 +2236,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusController = StatusBarController(
             settings: settings,
             scrollController: scrollController,
-            launchAgentManager: launchAgentManager
+            launchAgentManager: launchAgentManager,
+            applicationMonitor: applicationMonitor
         )
         scrollController.requestAccessibilityPermission()
         scrollController.applySettings()
+        if !CommandLine.arguments.contains("--background") {
+            statusController?.showSettings()
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         scrollController.stop()
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        statusController?.showSettings()
+        return true
     }
 
     private func configureLaunchAtLoginIfNeeded() {
