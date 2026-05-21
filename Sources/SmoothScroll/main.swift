@@ -763,36 +763,619 @@ final class StatusBarController {
         if NSApp.currentEvent?.type == .rightMouseUp {
             showQuickMenu(relativeTo: button)
         } else {
-            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-            popover.contentViewController?.view.window?.makeKey()
+            showSettings()
         }
     }
 
     private func updateStatusIcon(for status: ScrollStatus) {
-        statusItem.button?.contentTintColor = switch status {
-        case .running:
-            .controlAccentColor
-        case .disabled:
-            .secondaryLabelColor
-        case .permissionNeeded, .eventTapFailed:
-            .systemOrange
+        refreshStatusItem()
+        statusItem.button?.toolTip = "Mouse++: \(status.title)"
+    }
+
+    private func refreshStatusItem() {
+        statusItem.isVisible = settings.showInMenuBar
+        statusItem.button?.image = AppIcon.statusImage()
+        statusItem.button?.contentTintColor = .white
+    }
+
+    private func showQuickMenu(relativeTo button: NSStatusBarButton) {
+        let menu = NSMenu()
+
+        let toggleItem = NSMenuItem(
+            title: settings.enabled ? "Disable Mouse++" : "Enable Mouse++",
+            action: #selector(toggleEnabled),
+            keyEquivalent: ""
+        )
+        toggleItem.target = self
+        toggleItem.state = settings.enabled ? .on : .off
+        menu.addItem(toggleItem)
+
+        menu.addItem(.separator())
+
+        let updateItem = NSMenuItem(title: "Update Mouse++", action: #selector(runUpdater), keyEquivalent: "")
+        updateItem.target = self
+        menu.addItem(updateItem)
+
+        let settingsItem = NSMenuItem(title: "Settings...", action: #selector(showSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+
+        let accessibilityItem = NSMenuItem(
+            title: "Accessibility Settings...",
+            action: #selector(openPrivacySettings),
+            keyEquivalent: ""
+        )
+        accessibilityItem.target = self
+        menu.addItem(accessibilityItem)
+
+        menu.addItem(.separator())
+
+        let quitItem = NSMenuItem(title: "Quit Mouse++", action: #selector(quit), keyEquivalent: "q")
+        quitItem.target = self
+        menu.addItem(quitItem)
+
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 4), in: button)
+    }
+
+    @objc func showSettings() {
+        settingsWindowController.show()
+    }
+
+    @objc private func toggleEnabled() {
+        settings.enabled.toggle()
+        scrollController.applySettings()
+    }
+
+    @objc private func openPrivacySettings() {
+        scrollController.requestAccessibilityPermission()
+        openPrivacySettingsURL(for: scrollController.status)
+    }
+
+    @objc private func runUpdater() {
+        do {
+            try AppUpdater.start()
+        } catch {
+            showAlert(
+                title: "Update Failed",
+                message: [error.localizedDescription, (error as? LocalizedError)?.recoverySuggestion]
+                    .compactMap { $0 }
+                    .joined(separator: "\n\n")
+            )
+        }
+    }
+
+    private func showAlert(title: String, message: String) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.alertStyle = .informational
+        alert.runModal()
+    }
+
+    @objc private func quit() {
+        NSApp.terminate(nil)
+    }
+}
+
+@MainActor
+final class SettingsWindowController: NSWindowController {
+    private var hasCenteredWindow = false
+
+    init(
+        settings: SettingsStore,
+        scrollController: ScrollController,
+        launchAgentManager: LaunchAgentManager,
+        applicationMonitor: ApplicationMonitor
+    ) {
+        let viewController = SettingsViewController(
+            settings: settings,
+            scrollController: scrollController,
+            launchAgentManager: launchAgentManager,
+            applicationMonitor: applicationMonitor
+        )
+        let window = NSWindow(contentViewController: viewController)
+        window.title = "Mouse++"
+        window.styleMask = [.titled, .closable, .miniaturizable]
+        window.setContentSize(NSSize(width: 544, height: 520))
+        window.isReleasedWhenClosed = false
+        window.center()
+        super.init(window: window)
+    }
+
+    required init?(coder: NSCoder) {
+        nil
+    }
+
+    func show() {
+        if !hasCenteredWindow {
+            window?.center()
+            hasCenteredWindow = true
+        }
+        window?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
+private enum AppIcon {
+    static func statusImage() -> NSImage {
+        if let image = bundledImage(size: NSSize(width: 18, height: 18)) {
+            return image
+        }
+        return fallbackStatusImage()
+    }
+
+    static func largeImage() -> NSImage {
+        if let image = bundledImage(size: NSSize(width: 64, height: 64)) {
+            return image
+        }
+        return fallbackLargeImage()
+    }
+
+    private static func bundledImage(size: NSSize) -> NSImage? {
+        let url = Bundle.main.url(forResource: "AppIcon", withExtension: "svg") ??
+            Bundle.main.url(forResource: "AppIcon", withExtension: "icns")
+        guard
+            let url,
+            let image = NSImage(contentsOf: url)
+        else {
+            return nil
+        }
+        image.size = size
+        image.isTemplate = false
+        return image
+    }
+
+    private static func fallbackStatusImage() -> NSImage {
+        let image = NSImage(size: NSSize(width: 18, height: 18))
+        image.lockFocus()
+        NSColor.white.setStroke()
+
+        let body = NSBezierPath(roundedRect: NSRect(x: 5, y: 2.5, width: 8, height: 13), xRadius: 4, yRadius: 4)
+        body.lineWidth = 1.9
+        body.stroke()
+
+        let divider = NSBezierPath()
+        divider.move(to: NSPoint(x: 9, y: 15.2))
+        divider.line(to: NSPoint(x: 9, y: 11.2))
+        divider.lineWidth = 1.5
+        divider.stroke()
+
+        let wheel = NSBezierPath()
+        wheel.move(to: NSPoint(x: 9, y: 10.1))
+        wheel.line(to: NSPoint(x: 9, y: 8.2))
+        wheel.lineWidth = 1.8
+        wheel.stroke()
+
+        image.unlockFocus()
+        image.isTemplate = false
+        return image
+    }
+
+    private static func fallbackLargeImage() -> NSImage {
+        let image = NSImage(size: NSSize(width: 64, height: 64))
+        image.lockFocus()
+
+        NSColor.controlAccentColor.setFill()
+        NSBezierPath(roundedRect: NSRect(x: 4, y: 4, width: 56, height: 56), xRadius: 14, yRadius: 14).fill()
+
+        NSColor.white.setStroke()
+        let body = NSBezierPath(roundedRect: NSRect(x: 23, y: 13, width: 18, height: 38), xRadius: 9, yRadius: 9)
+        body.lineWidth = 3.5
+        body.stroke()
+
+        let divider = NSBezierPath()
+        divider.move(to: NSPoint(x: 32, y: 51))
+        divider.line(to: NSPoint(x: 32, y: 40))
+        divider.lineWidth = 2.8
+        divider.stroke()
+
+        let wheel = NSBezierPath()
+        wheel.move(to: NSPoint(x: 32, y: 37))
+        wheel.line(to: NSPoint(x: 32, y: 31))
+        wheel.lineWidth = 3.2
+        wheel.stroke()
+
+        image.unlockFocus()
+        return image
+    }
+}
+
+private enum AppUpdater {
+    static func start() throws {
+        let updaterURL = try updaterScriptURL()
+        let logHandle = try updateLogHandle()
+
+        var environment = ProcessInfo.processInfo.environment
+        environment["MOUSE_PLUS_PLUS_UPDATE_FROM_APP"] = "1"
+        if let installDirectory = installedDirectoryPath() {
+            environment["SMOOTH_SCROLL_INSTALL_DIR"] = installDirectory
+        }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/nohup")
+        process.arguments = ["/bin/zsh", updaterURL.path]
+        process.currentDirectoryURL = updaterURL.deletingLastPathComponent()
+        process.environment = environment
+        process.standardOutput = logHandle
+        process.standardError = logHandle
+        try process.run()
+    }
+
+    static var logURL: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library", isDirectory: true)
+            .appendingPathComponent("Logs", isDirectory: true)
+            .appendingPathComponent("Mouse++", isDirectory: true)
+            .appendingPathComponent("update.log")
+    }
+
+    private static func updaterScriptURL() throws -> URL {
+        let candidates = [
+            ProcessInfo.processInfo.environment["MOUSE_PLUS_PLUS_UPDATER"].map(URL.init(fileURLWithPath:)),
+            sourceRootPath().map { URL(fileURLWithPath: $0).appendingPathComponent("install.sh") },
+            FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Downloads", isDirectory: true)
+                .appendingPathComponent("macmouse", isDirectory: true)
+                .appendingPathComponent("install.sh")
+        ].compactMap { $0 }
+
+        if let updaterURL = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0.path) }) {
+            return updaterURL
+        }
+
+        throw UpdaterError.notFound
+    }
+
+    private static func updateLogHandle() throws -> FileHandle {
+        let directoryURL = logURL.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        if !FileManager.default.fileExists(atPath: logURL.path) {
+            FileManager.default.createFile(atPath: logURL.path, contents: nil)
+        }
+        let handle = try FileHandle(forWritingTo: logURL)
+        try handle.seekToEnd()
+        return handle
+    }
+
+    private static func sourceRootPath() -> String? {
+        bundledPath(named: "SourceRoot")
+    }
+
+    private static func installedDirectoryPath() -> String? {
+        bundledPath(named: "InstallDirectory")
+    }
+
+    private static func bundledPath(named name: String) -> String? {
+        guard
+            let url = Bundle.main.url(forResource: name, withExtension: "path"),
+            let contents = try? String(contentsOf: url, encoding: .utf8)
+        else {
+            return nil
+        }
+        let path = contents.trimmingCharacters(in: .whitespacesAndNewlines)
+        return path.isEmpty ? nil : path
+    }
+
+    enum UpdaterError: LocalizedError {
+        case notFound
+
+        var errorDescription: String? {
+            switch self {
+            case .notFound:
+                "Mouse++ could not find its update script."
+            }
+        }
+
+        var recoverySuggestion: String? {
+            "Run install.sh once from the source folder, then use Update Mouse++ from the app."
         }
     }
 }
 
 @MainActor
+final class NumberInputRow: NSStackView, NSTextFieldDelegate {
+    private let minValue: Double
+    private let maxValue: Double
+    private let decimals: Int
+    private let textField = NSTextField()
+    private let stepper = NSStepper()
+    private var isUpdating = false
+
+    var onValueChange: ((Double) -> Void)?
+
+    init(title: String, minValue: Double, maxValue: Double, step: Double, decimals: Int, suffix: String) {
+        self.minValue = minValue
+        self.maxValue = maxValue
+        self.decimals = decimals
+        super.init(frame: .zero)
+
+        orientation = .horizontal
+        alignment = .centerY
+        spacing = 8
+        translatesAutoresizingMaskIntoConstraints = false
+        widthAnchor.constraint(equalToConstant: 400).isActive = true
+
+        let titleLabel = NSTextField(labelWithString: title)
+        titleLabel.font = .preferredFont(forTextStyle: .body)
+        titleLabel.widthAnchor.constraint(equalToConstant: 138).isActive = true
+
+        textField.alignment = .right
+        textField.controlSize = .regular
+        textField.target = self
+        textField.action = #selector(textFieldChanged)
+        textField.delegate = self
+        textField.widthAnchor.constraint(equalToConstant: 74).isActive = true
+
+        let suffixLabel = NSTextField(labelWithString: suffix)
+        suffixLabel.textColor = .secondaryLabelColor
+        suffixLabel.widthAnchor.constraint(equalToConstant: 34).isActive = true
+
+        stepper.minValue = minValue
+        stepper.maxValue = maxValue
+        stepper.increment = step
+        stepper.controlSize = .small
+        stepper.target = self
+        stepper.action = #selector(stepperChanged)
+
+        let inputGroup = NSStackView()
+        inputGroup.orientation = .horizontal
+        inputGroup.alignment = .centerY
+        inputGroup.spacing = 2
+        inputGroup.addArrangedSubview(textField)
+        inputGroup.addArrangedSubview(stepper)
+
+        addArrangedSubview(titleLabel)
+        addArrangedSubview(inputGroup)
+        addArrangedSubview(suffixLabel)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func setValue(_ value: Double) {
+        let value = value.clamped(to: minValue ... maxValue)
+        isUpdating = true
+        stepper.doubleValue = value
+        textField.stringValue = formatted(value)
+        isUpdating = false
+    }
+
+    func controlTextDidEndEditing(_ obj: Notification) {
+        commitTextFieldValue()
+    }
+
+    @objc private func textFieldChanged() {
+        commitTextFieldValue()
+    }
+
+    @objc private func stepperChanged() {
+        apply(stepper.doubleValue)
+    }
+
+    private func commitTextFieldValue() {
+        guard let value = Double(textField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            setValue(stepper.doubleValue)
+            return
+        }
+        apply(value)
+    }
+
+    private func apply(_ rawValue: Double) {
+        let value = rawValue.clamped(to: minValue ... maxValue)
+        setValue(value)
+        guard !isUpdating else {
+            return
+        }
+        onValueChange?(value)
+    }
+
+    private func formatted(_ value: Double) -> String {
+        if decimals == 0 {
+            return "\(Int(value.rounded()))"
+        }
+        return String(format: "%.\(decimals)f", value)
+    }
+}
+
+@MainActor
+class ClickableView: NSView {
+    var onClick: (() -> Void)?
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        super.hitTest(point) != nil ? self : nil
+    }
+
+    override func mouseDown(with event: NSEvent) {}
+
+    override func mouseUp(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        if bounds.contains(point) {
+            onClick?()
+        }
+    }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .pointingHand)
+    }
+}
+
+@MainActor
+final class TabBarItem: ClickableView {
+    private let iconView = NSImageView()
+    private let label = NSTextField(labelWithString: "")
+    private var isSelected = false
+
+    init(title: String, symbolName: String) {
+        super.init(frame: .zero)
+        translatesAutoresizingMaskIntoConstraints = false
+        wantsLayer = true
+        layer?.cornerRadius = 8
+
+        iconView.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: title)?
+            .withSymbolConfiguration(.init(pointSize: 19, weight: .regular))
+        iconView.contentTintColor = .secondaryLabelColor
+        iconView.imageScaling = .scaleProportionallyUpOrDown
+
+        label.stringValue = title
+        label.font = .systemFont(ofSize: 11.5, weight: .semibold)
+        label.textColor = .secondaryLabelColor
+        label.alignment = .center
+
+        let stack = NSStackView(views: [iconView, label])
+        stack.orientation = .vertical
+        stack.alignment = .centerX
+        stack.spacing = 3
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+
+        NSLayoutConstraint.activate([
+            stack.centerXAnchor.constraint(equalTo: centerXAnchor),
+            stack.centerYAnchor.constraint(equalTo: centerYAnchor),
+            widthAnchor.constraint(equalTo: stack.widthAnchor, constant: 22),
+            heightAnchor.constraint(equalTo: stack.heightAnchor, constant: 12)
+        ])
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func setSelected(_ selected: Bool) {
+        isSelected = selected
+        applyStyle()
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        applyStyle()
+    }
+
+    private func applyStyle() {
+        let color: NSColor = isSelected ? .controlAccentColor : .secondaryLabelColor
+        iconView.contentTintColor = color
+        label.textColor = color
+        if isSelected {
+            effectiveAppearance.performAsCurrentDrawingAppearance {
+                layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.15).cgColor
+            }
+        } else {
+            layer?.backgroundColor = NSColor.clear.cgColor
+        }
+    }
+}
+
+@MainActor
+final class LinkButton: ClickableView {
+    init(title: String, symbolName: String, onClick: @escaping () -> Void) {
+        super.init(frame: .zero)
+        translatesAutoresizingMaskIntoConstraints = false
+
+        let iconView = NSImageView()
+        iconView.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: title)?
+            .withSymbolConfiguration(.init(pointSize: 12, weight: .semibold))
+        iconView.contentTintColor = .controlAccentColor
+
+        let label = NSTextField(labelWithString: title)
+        label.font = .systemFont(ofSize: 14, weight: .medium)
+        label.textColor = .controlAccentColor
+
+        let stack = NSStackView(views: [iconView, label])
+        stack.orientation = .horizontal
+        stack.alignment = .centerY
+        stack.spacing = 4
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: topAnchor),
+            stack.bottomAnchor.constraint(equalTo: bottomAnchor),
+            stack.centerXAnchor.constraint(equalTo: centerXAnchor),
+            stack.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor)
+        ])
+
+        self.onClick = onClick
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+}
+
+@MainActor
 final class SettingsViewController: NSViewController {
+    private enum SettingsTab: Int, CaseIterable {
+        case general
+        case scrolling
+        case apps
+        case about
+
+        var title: String {
+            switch self {
+            case .general:
+                "General"
+            case .scrolling:
+                "Scrolling"
+            case .apps:
+                "Apps"
+            case .about:
+                "About"
+            }
+        }
+
+        var symbolName: String {
+            switch self {
+            case .general:
+                "gearshape"
+            case .scrolling:
+                "arrow.up.and.down"
+            case .apps:
+                "app.badge"
+            case .about:
+                "info.circle"
+            }
+        }
+
+        var contentSize: NSSize {
+            switch self {
+            case .general:
+                NSSize(width: 544, height: 230)
+            case .scrolling:
+                NSSize(width: 544, height: 520)
+            case .apps:
+                NSSize(width: 544, height: 300)
+            case .about:
+                NSSize(width: 544, height: 255)
+            }
+        }
+    }
+
     private let settings: SettingsStore
     private let scrollController: ScrollController
     private let launchAgentManager: LaunchAgentManager
+    private let applicationMonitor: ApplicationMonitor
+    private let contentWidth: CGFloat = 420
+    private let contentContainer = NSView()
+    private var tabButtons: [SettingsTab: TabBarItem] = [:]
+    private var selectedTab: SettingsTab = .scrolling
+    private var accessibilityRows: [NSView] = []
 
-    private let statusLabel = NSTextField(labelWithString: "")
-    private let enabledButton = NSButton()
-    private let launchAtLoginButton = NSButton()
-    private let strengthSlider = NSSlider()
-    private let smoothnessSlider = NSSlider()
-    private let strengthValueLabel = NSTextField(labelWithString: "")
-    private let smoothnessValueLabel = NSTextField(labelWithString: "")
+    private let launchAtLoginButton = NSSwitch()
+    private let presetPopup = NSPopUpButton()
+    private let bypassPopup = NSPopUpButton()
+    private let precisionPopup = NSPopUpButton()
+    private let boostPopup = NSPopUpButton()
+    private let excludedAppsPopup = NSPopUpButton()
+    private let currentAppLabel = NSTextField(labelWithString: "")
+    private let versionLabel = NSTextField(labelWithString: "")
+    private let reverseVerticalButton = NSButton()
+    private let reverseHorizontalButton = NSButton()
+    private let showInMenuBarButton = NSSwitch()
+    private var strengthRow: NumberInputRow!
+    private var smoothnessRow: NumberInputRow!
+    private var verticalRow: NumberInputRow!
+    private var horizontalRow: NumberInputRow!
+    private var accelerationRow: NumberInputRow!
 
     init(
         settings: SettingsStore,
