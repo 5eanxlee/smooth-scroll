@@ -104,12 +104,7 @@ cd "$ROOT_DIR"
 notify_from_app "Updating Mouse++..."
 
 swift build \
-  -c "$CONFIGURATION" \
-  --disable-sandbox \
-  --cache-path "$ROOT_DIR/.build/swiftpm-cache" \
-  --scratch-path "$ROOT_DIR/.build" \
-  --manifest-cache local \
-  --disable-dependency-cache
+  -c "$CONFIGURATION"
 
 rm -rf "$APP_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
