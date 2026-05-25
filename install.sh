@@ -102,8 +102,6 @@ build_app_icon() {
 
 cd "$ROOT_DIR"
 notify_from_app "Updating Mouse++..."
-mkdir -p "$ROOT_DIR/.build/module-cache"
-export CLANG_MODULE_CACHE_PATH="$ROOT_DIR/.build/module-cache"
 
 swift build \
   -c "$CONFIGURATION" \
