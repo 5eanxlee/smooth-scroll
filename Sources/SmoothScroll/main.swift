@@ -346,15 +346,23 @@ enum ScrollStatus: Equatable {
 
 final class ScrollController {
     private static let syntheticEventMarker: Int64 = 0x4C53534D_5343524C
+    private enum ScrollStreamState {
+        case idle
+        case gesture
+        case momentum
+    }
 
     private let settings: SettingsStore
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
-    private var timer: DispatchSourceTimer?
+    private var displayLink: DisplayLinkDriver?
     private var permissionRetryTimer: DispatchSourceTimer?
-    private var lastTick: TimeInterval?
+    private var lastInputTime: TimeInterval?
+    private var streamState = ScrollStreamState.idle
     private var engine = ScrollPhysicsEngine()
     private let eventSource = CGEventSource(stateID: .hidSystemState)
+    private let eventSynthesizer = TrackpadScrollEventSynthesizer()
+    private let gestureQuietTime: TimeInterval = 0.11
 
     private(set) var status: ScrollStatus = .disabled {
         didSet {
