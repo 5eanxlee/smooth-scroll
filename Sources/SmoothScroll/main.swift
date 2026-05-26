@@ -517,19 +517,16 @@ final class ScrollController {
         return settings.isExcluded(bundleIdentifier: bundleIdentifier)
     }
 
-    private func startTimerIfNeeded() {
-        guard timer == nil else {
+    private func startDisplayLinkIfNeeded() {
+        guard displayLink == nil else {
             return
         }
 
-        lastTick = nil
-        let timer = DispatchSource.makeTimerSource(queue: .main)
-        timer.schedule(deadline: .now(), repeating: .milliseconds(8), leeway: .milliseconds(1))
-        timer.setEventHandler { [weak self] in
-            self?.tick()
+        let displayLink = DisplayLinkDriver { [weak self] _, deltaTime in
+            self?.tick(deltaTime: deltaTime)
         }
-        timer.resume()
-        self.timer = timer
+        displayLink?.start()
+        self.displayLink = displayLink
     }
 
     private func tick() {
