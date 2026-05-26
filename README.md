@@ -2,6 +2,37 @@
 
 Mouse++ is a small macOS menu bar app that turns stepped mouse-wheel input into smooth, trackpad-like scrolling.
 
+## Quick Install
+
+With Homebrew:
+
+```zsh
+brew tap 5eanxlee/smooth-scroll
+brew install --cask mouse-plus-plus
+```
+
+Or as one shell line:
+
+```zsh
+brew tap 5eanxlee/smooth-scroll && brew install --cask mouse-plus-plus
+```
+
+From this source folder:
+
+```zsh
+./bootstrap.sh
+```
+
+The bootstrap script checks for Xcode command line tools, installs an app icon renderer with Homebrew if needed, then runs `install.sh`.
+
+For a mostly unattended setup:
+
+```zsh
+MOUSE_PLUS_PLUS_ASSUME_YES=1 ./bootstrap.sh
+```
+
+macOS privacy permissions still require manual approval after the app opens.
+
 ## Requirements
 
 - macOS 13 or newer.
@@ -25,13 +56,26 @@ brew install imagemagick
 
 ## Install
 
-From this source folder:
+For a Homebrew install, use:
+
+```zsh
+brew tap 5eanxlee/smooth-scroll
+brew install --cask mouse-plus-plus
+```
+
+For source-folder installs, use:
+
+```zsh
+./bootstrap.sh
+```
+
+If you already have the requirements installed, you can run the lower-level installer directly:
 
 ```zsh
 ./install.sh
 ```
 
-The installer:
+The direct installer:
 
 - Builds the release binary with `swift build -c release`.
 - Creates `dist/Mouse++.app`.
@@ -43,19 +87,19 @@ The installer:
 To install somewhere else:
 
 ```zsh
-SMOOTH_SCROLL_INSTALL_DIR="/Applications" ./install.sh
+SMOOTH_SCROLL_INSTALL_DIR="/Applications" ./bootstrap.sh
 ```
 
 To build/install without opening the app:
 
 ```zsh
-SMOOTH_SCROLL_SKIP_OPEN=1 ./install.sh
+SMOOTH_SCROLL_SKIP_OPEN=1 ./bootstrap.sh
 ```
 
 To force a signing identity:
 
 ```zsh
-SMOOTH_SCROLL_SIGN_IDENTITY="Apple Development: Your Name (TEAMID)" ./install.sh
+SMOOTH_SCROLL_SIGN_IDENTITY="Apple Development: Your Name (TEAMID)" ./bootstrap.sh
 ```
 
 ## First Run Permissions
@@ -85,15 +129,21 @@ The launch agent points at the currently installed app bundle. If you reinstall 
 
 ## Updating
 
-Run the installer again:
+For Homebrew installs:
 
 ```zsh
-./install.sh
+brew upgrade --cask mouse-plus-plus
 ```
 
-Or use `Update Mouse++` from the app menu/About tab.
+For source installs, run the installer again:
 
-The in-app updater works because `install.sh` writes the source checkout path into the app bundle during install. Keep this repo folder available if you want `Update Mouse++` to keep working. If you move the repo, run `./install.sh` once from the new location.
+```zsh
+./bootstrap.sh
+```
+
+Or use `Update Mouse++` from the app menu/About tab after a source install.
+
+The in-app updater works because `install.sh` writes the source checkout path into the app bundle during install. Keep this repo folder available if you want `Update Mouse++` to keep working. If you move the repo, run `./bootstrap.sh` once from the new location. Homebrew installs should be updated with Homebrew instead.
 
 Update logs are written to:
 
