@@ -538,26 +538,67 @@ final class ScrollController {
         }
 
         if !engine.isActive {
-            stopTimer()
+            finishActiveStream()
+            stopDisplayLink(finishingStream: false)
         }
     }
 
-    private func post(frame: ScrollFrame) {
-        let wheelCount: UInt32 = frame.pixelsX == 0 ? 1 : 2
-        guard let event = CGEvent(
-            scrollWheelEvent2Source: eventSource,
-            units: .pixel,
-            wheelCount: wheelCount,
-            wheel1: frame.pixelsY,
-            wheel2: frame.pixelsX,
-            wheel3: 0
-        ) else {
-            return
-        }
+    private func post(frame: ScrollFrame, at now: TimeInterval) {
+        let inputIsRecent = lastInputTime.map { now - $0 <= gestureQuietTime } ?? false
 
-        event.setIntegerValueField(CGEventField.eventSourceUserData, value: Self.syntheticEventMarker)
-        event.setIntegerValueField(CGEventField.scrollWheelEventIsContinuous, value: 1)
-        event.post(tap: CGEventTapLocation.cghidEventTap)
+        switch streamState {
+        case .idle:
+            eventSynthesizer.resetLineAccumulator()
+            streamState = .gesture
+            eventSynthesizer.postScroll(
+                deltaX: frame.pixelsX,
+                deltaY: frame.pixelsY,
+                scrollPhase: .began,
+                momentumPhase: .none,
+                syntheticMarker: Self.syntheticEventMarker,
+                source: eventSource
+            )
+        case .gesture where inputIsRecent:
+            eventSynthesizer.postScroll(
+                deltaX: frame.pixelsX,
+                deltaY: frame.pixelsY,
+                scrollPhase: .changed,
+                momentumPhase: .none,
+                syntheticMarker: Self.syntheticEventMarker,
+                source: eventSource
+            )
+        case .gesture:
+            finishGesture()
+            streamState = .momentum
+            eventSynthesizer.postScroll(
+                deltaX: frame.pixelsX,
+                deltaY: frame.pixelsY,
+                scrollPhase: .none,
+                momentumPhase: .began,
+                syntheticMarker: Self.syntheticEventMarker,
+                source: eventSource
+            )
+        case .momentum:
+            eventSynthesizer.postScroll(
+                deltaX: frame.pixelsX,
+                deltaY: frame.pixelsY,
+                scrollPhase: .none,
+                momentumPhase: .changed,
+                syntheticMarker: Self.syntheticEventMarker,
+                source: eventSource
+            )
+        }
+    }
+
+    private func finishActiveStream() {
+        switch streamState {
+        case .idle:
+            break
+        case .gesture:
+            finishGesture()
+        case .momentum:
+            finishMomentum()
+        }
     }
 
     private func stopTimer() {
