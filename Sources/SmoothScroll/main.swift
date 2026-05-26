@@ -529,14 +529,12 @@ final class ScrollController {
         self.displayLink = displayLink
     }
 
-    private func tick() {
+    private func tick(deltaTime: TimeInterval) {
         let now = ProcessInfo.processInfo.systemUptime
-        let deltaTime = lastTick.map { now - $0 } ?? (1.0 / 120.0)
-        lastTick = now
-
         let frame = engine.nextFrame(deltaTime: deltaTime)
+
         if frame.hasPixels {
-            post(frame: frame)
+            post(frame: frame, at: now)
         }
 
         if !engine.isActive {
