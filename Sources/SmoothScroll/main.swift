@@ -1746,7 +1746,7 @@ final class SettingsViewController: NSViewController {
         configureModifierPopup(precisionPopup, action: #selector(precisionModifierChanged))
         stack.addArrangedSubview(popupRow(title: "Precision", popup: precisionPopup))
         configureModifierPopup(boostPopup, action: #selector(boostModifierChanged))
-        stack.addArrangedSubview(popupRow(title: "Swift", popup: boostPopup))
+        stack.addArrangedSubview(popupRow(title: "Boost", popup: boostPopup))
 
         stack.addArrangedSubview(actionButton("Reset Scrolling", action: #selector(resetScrolling)))
 
