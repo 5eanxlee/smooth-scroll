@@ -464,7 +464,7 @@ final class ScrollController {
         }
 
         if shouldPassThrough(event: event) {
-            stopTimer()
+            stopDisplayLink(finishingStream: true)
             engine.reset()
             return Unmanaged.passUnretained(event)
         }
