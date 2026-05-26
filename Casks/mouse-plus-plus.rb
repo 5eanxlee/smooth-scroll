@@ -1,5 +1,5 @@
 cask "mouse-plus-plus" do
-  version "latest"
+  version :latest
   sha256 :no_check
 
   url "https://github.com/5eanxlee/smooth-scroll.git",
@@ -44,6 +44,6 @@ cask "mouse-plus-plus" do
     Open System Settings > Privacy & Security after first launch if scrolling is not active.
 
     For Homebrew installs, update with:
-      brew upgrade --cask mouse-plus-plus
+      brew upgrade --cask --greedy-latest mouse-plus-plus
   EOS
 end

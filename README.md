@@ -132,7 +132,7 @@ The launch agent points at the currently installed app bundle. If you reinstall 
 For Homebrew installs:
 
 ```zsh
-brew upgrade --cask mouse-plus-plus
+brew upgrade --cask --greedy-latest mouse-plus-plus
 ```
 
 For source installs, run the installer again:
