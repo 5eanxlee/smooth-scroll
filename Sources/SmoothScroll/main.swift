@@ -432,7 +432,7 @@ final class ScrollController {
     }
 
     func stop() {
-        stopTimer()
+        stopDisplayLink(finishingStream: true)
         stopPermissionRetryTimer()
         stopEventTap()
         engine.reset()
