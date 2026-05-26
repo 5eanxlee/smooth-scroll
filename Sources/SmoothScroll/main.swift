@@ -601,11 +601,15 @@ final class ScrollController {
         }
     }
 
-    private func stopTimer() {
-        timer?.cancel()
-        timer = nil
-        lastTick = nil
-    }
+    private func finishGesture() {
+        eventSynthesizer.postScroll(
+            deltaX: 0,
+            deltaY: 0,
+            scrollPhase: .ended,
+            momentumPhase: .none,
+            syntheticMarker: Self.syntheticEventMarker,
+            source: eventSource
+        )
 
     private func startPermissionRetryTimerIfNeeded() {
         guard permissionRetryTimer == nil else {
