@@ -499,7 +499,11 @@ final class ScrollController {
             horizontalLines: horizontal,
             verticalLines: vertical
         )
-        startTimerIfNeeded()
+        lastInputTime = ProcessInfo.processInfo.systemUptime
+        if streamState == .momentum {
+            finishMomentum()
+        }
+        startDisplayLinkIfNeeded()
         return nil
     }
 
