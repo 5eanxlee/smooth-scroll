@@ -610,6 +610,20 @@ final class ScrollController {
             syntheticMarker: Self.syntheticEventMarker,
             source: eventSource
         )
+    }
+
+    private func finishMomentum() {
+        eventSynthesizer.postScroll(
+            deltaX: 0,
+            deltaY: 0,
+            scrollPhase: .none,
+            momentumPhase: .ended,
+            syntheticMarker: Self.syntheticEventMarker,
+            source: eventSource
+        )
+        eventSynthesizer.resetLineAccumulator()
+        streamState = .idle
+    }
 
     private func startPermissionRetryTimerIfNeeded() {
         guard permissionRetryTimer == nil else {
