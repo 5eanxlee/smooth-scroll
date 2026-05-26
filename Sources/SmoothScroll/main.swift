@@ -625,6 +625,19 @@ final class ScrollController {
         streamState = .idle
     }
 
+    private func stopDisplayLink(finishingStream: Bool) {
+        if finishingStream {
+            finishActiveStream()
+        }
+        displayLink?.stop()
+        displayLink = nil
+        lastInputTime = nil
+        if finishingStream || !engine.isActive {
+            streamState = .idle
+            eventSynthesizer.resetLineAccumulator()
+        }
+    }
+
     private func startPermissionRetryTimerIfNeeded() {
         guard permissionRetryTimer == nil else {
             return
